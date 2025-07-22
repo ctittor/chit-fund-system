@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model: for authentication and roles
+model User {
+  id          Int       @id @default(autoincrement())
+  email       String    @unique
+  password    String
+  role        UserRole  @default(CUSTOMER)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  customerId  Int?      @unique  // One-to-one: ensure customerId is unique
+}
+
+// Customer model: chit fund customers (optionally linked to User)
+model Customer {
+  id            Int            @id @default(autoincrement())
+  name          String
+  email         String         @unique
+  phone         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user          User?          @relation
+  subscriptions Subscription[]
+  emiPayments   EmiPayment[]
+  bids          Bid[]          // Back-relation to Bid
+}
+
+// Chit model: chit fund schemes
+model Chit {
+  id           Int            @id @default(autoincrement())
+  name         String
+  chitValue    Decimal        @db.Decimal(15, 2)
+  duration     Int            // Total periods/months
+  installment  Decimal        @db.Decimal(15, 2)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  subscriptions Subscription[]
+  auctions      Auction[]
+  emiPayments   EmiPayment[]
+}
+
+// Subscription model: enrolls customer to chit scheme
+model Subscription {
+  id           Int                @id @default(autoincrement())
+  customerId   Int
+  chitId       Int
+  startDate    DateTime
+  status       SubscriptionStatus @default(ACTIVE)
+
+  customer     Customer           @relation(fields: [customerId], references: [id])
+  chit         Chit               @relation(fields: [chitId], references: [id])
+}
+
+// EmiPayment model: records customer EMI payments
+model EmiPayment {
+  id          Int       @id @default(autoincrement())
+  customerId  Int
+  chitId      Int
+  amount      Decimal   @db.Decimal(15, 2)
+  paymentDate DateTime  @default(now())
+  status      EmiStatus @default(PENDING)
+
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  chit        Chit      @relation(fields: [chitId], references: [id])
+
+  @@index([customerId])
+  @@index([chitId])
+}
+
+// Auction model: monthly chit bidding event
+model Auction {
+  id          Int             @id @default(autoincrement())
+  chitId      Int
+  auctionDate DateTime
+  status      AuctionStatus   @default(SCHEDULED)
+
+  chit        Chit            @relation(fields: [chitId], references: [id])
+  bids        Bid[]
+}
+
+// Bid model: customer's bid during an auction
+model Bid {
+  id         Int       @id @default(autoincrement())
+  auctionId  Int
+  customerId Int
+  amount     Decimal   @db.Decimal(15, 2)
+  bidTime    DateTime  @default(now())
+
+  auction    Auction   @relation(fields: [auctionId], references: [id])
+  customer   Customer  @relation(fields: [customerId], references: [id])
+}
+
+// Enums for roles and statuses
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  CUSTOMER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CLOSED
+  DEFAULTED
+}
+
+enum EmiStatus {
+  PENDING
+  PAID
+  LATE
+}
+
+enum AuctionStatus {
+  SCHEDULED
+  LIVE
+  CLOSED
+}
