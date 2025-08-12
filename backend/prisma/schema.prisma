@@ -7,122 +7,106 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User model: for authentication and roles
-model User {
-  id          Int       @id @default(autoincrement())
-  email       String    @unique
-  password    String
-  role        UserRole  @default(CUSTOMER)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  customer    Customer? @relation(fields: [customerId], references: [id])
-  customerId  Int?      @unique  // One-to-one: ensure customerId is unique
-}
-
-// Customer model: chit fund customers (optionally linked to User)
-model Customer {
-  id            Int            @id @default(autoincrement())
-  name          String
-  email         String         @unique
-  phone         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  user          User?          @relation
-  subscriptions Subscription[]
-  emiPayments   EmiPayment[]
-  bids          Bid[]          // Back-relation to Bid
-}
-
-// Chit model: chit fund schemes
-model Chit {
-  id           Int            @id @default(autoincrement())
-  name         String
-  chitValue    Decimal        @db.Decimal(15, 2)
-  duration     Int            // Total periods/months
-  installment  Decimal        @db.Decimal(15, 2)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-
-  subscriptions Subscription[]
-  auctions      Auction[]
-  emiPayments   EmiPayment[]
-}
-
-// Subscription model: enrolls customer to chit scheme
-model Subscription {
-  id           Int                @id @default(autoincrement())
-  customerId   Int
-  chitId       Int
-  startDate    DateTime
-  status       SubscriptionStatus @default(ACTIVE)
-
-  customer     Customer           @relation(fields: [customerId], references: [id])
-  chit         Chit               @relation(fields: [chitId], references: [id])
-}
-
-// EmiPayment model: records customer EMI payments
-model EmiPayment {
-  id          Int       @id @default(autoincrement())
-  customerId  Int
-  chitId      Int
-  amount      Decimal   @db.Decimal(15, 2)
-  paymentDate DateTime  @default(now())
-  status      EmiStatus @default(PENDING)
-
-  customer    Customer  @relation(fields: [customerId], references: [id])
-  chit        Chit      @relation(fields: [chitId], references: [id])
-
-  @@index([customerId])
-  @@index([chitId])
-}
-
-// Auction model: monthly chit bidding event
-model Auction {
-  id          Int             @id @default(autoincrement())
-  chitId      Int
-  auctionDate DateTime
-  status      AuctionStatus   @default(SCHEDULED)
-
-  chit        Chit            @relation(fields: [chitId], references: [id])
-  bids        Bid[]
-}
-
-// Bid model: customer's bid during an auction
-model Bid {
-  id         Int       @id @default(autoincrement())
-  auctionId  Int
-  customerId Int
-  amount     Decimal   @db.Decimal(15, 2)
-  bidTime    DateTime  @default(now())
-
-  auction    Auction   @relation(fields: [auctionId], references: [id])
-  customer   Customer  @relation(fields: [customerId], references: [id])
-}
-
-// Enums for roles and statuses
-
-enum UserRole {
+enum Role {
   SUPER_ADMIN
   ADMIN
   CUSTOMER
 }
 
-enum SubscriptionStatus {
-  ACTIVE
-  CLOSED
-  DEFAULTED
+enum AuctionStatus {
+  SCHEDULED
+  RUNNING
+  COMPLETED
 }
 
 enum EmiStatus {
-  PENDING
   PAID
-  LATE
+  PENDING
+  MISSED
 }
 
-enum AuctionStatus {
-  SCHEDULED
-  LIVE
-  CLOSED
+model User {
+  id          Int       @id @default(autoincrement())
+  email       String    @unique
+  password    String
+  role        Role
+  admin       Admin?
+  customer    Customer?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Admin {
+  id          Int      @id @default(autoincrement())
+  name        String
+  user        User     @relation(fields: [userId], references: [id])
+  userId      Int      @unique
+  createdAt   DateTime @default(now())
+}
+
+model Customer {
+  id           Int           @id @default(autoincrement())
+  name         String
+  phone        String
+  user         User?         @relation(fields: [userId], references: [id])
+  userId       Int?          @unique
+  subscriptions Subscription[]
+  emiDetails   EmiDetail[]
+  bids         Bid[]
+  createdAt    DateTime      @default(now())
+}
+
+model Chit {
+  id           Int         @id @default(autoincrement())
+  name         String
+  totalAmount  Float
+  duration     Int
+  installment  Float
+  subscriptions Subscription[]
+  auctions     Auction[]
+  emiDetails   EmiDetail[]
+  createdAt    DateTime    @default(now())
+}
+
+model Subscription {
+  id           Int        @id @default(autoincrement())
+  customer     Customer   @relation(fields: [customerId], references: [id])
+  customerId   Int
+  chit         Chit       @relation(fields: [chitId], references: [id])
+  chitId       Int
+  startDate    DateTime
+  status       String
+  createdAt    DateTime   @default(now())
+}
+
+model EmiDetail {
+  id           Int        @id @default(autoincrement())
+  customer     Customer   @relation(fields: [customerId], references: [id])
+  customerId   Int
+  chit         Chit       @relation(fields: [chitId], references: [id])
+  chitId       Int
+  amount       Float
+  dueDate      DateTime
+  status       EmiStatus
+  createdAt    DateTime   @default(now())
+}
+
+model Auction {
+  id           Int        @id @default(autoincrement())
+  chit         Chit       @relation(fields: [chitId], references: [id])
+  chitId       Int
+  auctionDate  DateTime
+  status       AuctionStatus
+  bids         Bid[]
+  createdAt    DateTime   @default(now())
+}
+
+model Bid {
+  id           Int        @id @default(autoincrement())
+  auction      Auction    @relation(fields: [auctionId], references: [id])
+  auctionId    Int
+  customer     Customer   @relation(fields: [customerId], references: [id])
+  customerId   Int
+  amount       Float
+  createdAt    DateTime   @default(now())
 }
